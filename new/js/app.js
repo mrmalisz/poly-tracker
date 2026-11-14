@@ -1,32 +1,250 @@
-const state={wallets:JSON.parse(localStorage.getItem("wallets")||"[]"),alerts:JSON.parse(localStorage.getItem("alerts")||"[]"),markets:[],activity:WALLET_ACTIVITY,sound:true,triggeredToday:0,game:"cs2",archive:false};
-const $=id=>document.getElementById(id);
-const fmt=n=>(n*100).toFixed(1)+"%";
-const fmtMoney=n=>"$"+n.toLocaleString();
-const short=a=>a.slice(0,6)+"..."+a.slice(-4);
-function save(){localStorage.setItem("wallets",JSON.stringify(state.wallets));localStorage.setItem("alerts",JSON.stringify(state.alerts));}
-function toast(message,isAlert=false){const el=document.createElement("div");el.className="toast"+(isAlert?" alert":"");el.innerHTML=`<strong>${isAlert?"Alert":"Update"}</strong><br>${message}`;$("toast-stack").appendChild(el);setTimeout(()=>el.remove(),6000);
-if(isAlert&&state.sound){const ctx=new(window.AudioContext||window.webkitAudioContext)();const osc=ctx.createOscillator();const gain=ctx.createGain();osc.frequency.value=740;gain.gain.value=.05;osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+.18);}
-if(isAlert&&Notification.permission==="granted"){new Notification("Market alert",{body:message});}}
-function currentMarkets(){return state.markets.filter(m=>m.game===state.game);}
-function isSuspicious(m){if(m.status==="closed")return false;const move=Math.abs(m.change24h||0)*100;const soon=(m.startsInMinutes??Infinity)<=60;return move>=10||(soon&&move>=5);}
-function renderWallets(){const list=$("wallet-list");list.innerHTML="";state.wallets.forEach((w,i)=>{const li=document.createElement("li");li.innerHTML=`<div><strong>${w.label||"Wallet"}</strong><div class="addr">${short(w.address)}</div></div>`;const btn=document.createElement("button");btn.className="remove";btn.textContent="Remove";btn.onclick=()=>{state.wallets.splice(i,1);save();renderWallets();};li.appendChild(btn);list.appendChild(li);});$("stat-wallets").textContent=state.wallets.length;}
-function renderMarkets(){const platform=$("platform-filter").value;const q=$("search").value.toLowerCase();const rows=currentMarkets().filter(m=>(platform==="all"||m.platform===platform)&&(m.market+m.event).toLowerCase().includes(q));
-$("market-rows").innerHTML=rows.map(m=>{const suspicious=isSuspicious(m);const soon=(m.startsInMinutes??Infinity)<=60&&m.status!=="closed";return`<tr class="${suspicious?"suspicious":""}"><td><strong>${m.market}</strong><br><span style="color:var(--muted)">${m.event}</span></td><td>${m.platform==="polymarket"?"Polymarket":"Kalshi"}</td><td>${fmt(m.yes)}</td><td>${fmt(m.no)}</td><td class="${m.change24h>=0?"up":"down"}">${m.change24h>=0?"+":""}${(m.change24h*100).toFixed(1)}%</td><td>${fmtMoney(m.volume)}</td><td><span class="badge ${m.status}">${m.status}</span></td><td>${suspicious?'<span class="badge suspicious">Suspicious movement</span>':soon?'<span class="badge starting">Starting soon</span>':"-"}</td></tr>`;}).join("")||`<tr><td colspan="8">No markets found for this game.</td></tr>`;
-$("stat-markets").textContent=currentMarkets().length;$("game-title").textContent=gameLabel(state.game)+(state.archive?" archive":" markets");}
-function gameLabel(game){return{cs2:"CS2",dota2:"Dota 2",lol:"League of Legends",valorant:"Valorant"}[game];}
-function renderAlerts(){const list=$("alert-list");list.innerHTML=state.alerts.length?"":"<li>No alert rules yet.</li>";state.alerts.forEach((a,i)=>{const market=state.markets.find(m=>m.id===a.marketId);const li=document.createElement("li");li.innerHTML=`<strong>${a.type==="wallet_bet"?"Wallet bet alert":market?.market||"Market"}</strong><br><span style="color:var(--muted)">${describeAlert(a)}</span>`;const btn=document.createElement("button");btn.className="remove";btn.textContent="Delete";btn.onclick=()=>{state.alerts.splice(i,1);save();renderAlerts();};li.appendChild(btn);list.appendChild(li);});$("stat-alerts").textContent=state.alerts.length;}
-function describeAlert(a){if(a.type==="wallet_bet")return"Any watched wallet opens or changes a position";if(a.type==="move")return`Yes price moves by at least ${a.threshold}%`;if(a.type==="price_above")return`Yes price rises above ${a.threshold}%`;return`Yes price falls below ${a.threshold}%`;}
-function renderActivity(){$("activity-feed").innerHTML=state.activity.map(a=>`<li><strong>${a.label}</strong> bet <strong>${fmtMoney(a.amount)}</strong> on <span class="${a.side==="YES"?"up":"down"}">${a.side}</span> — ${a.market}<br><span style="color:var(--muted)">${a.platform} • ${a.wallet} • ${a.time}</span></li>`).join("");}
-function populateMarkets(){$("alert-market").innerHTML=currentMarkets().map(m=>`<option value="${m.id}">${m.market}</option>`).join("");}
-function evaluateAlerts(){currentMarkets().forEach(m=>{state.alerts.forEach(a=>{if(a.triggered)return;let hit=false,msg="";if(a.type==="price_above"&&m.yes*100>=a.threshold){hit=true;msg=`${m.market} Yes is now ${fmt(m.yes)}`;}if(a.type==="price_below"&&m.yes*100<=a.threshold){hit=true;msg=`${m.market} Yes is now ${fmt(m.yes)}`;}if(a.type==="move"&&Math.abs(m.change24h)*100>=a.threshold){hit=true;msg=`${m.market} moved ${(m.change24h*100).toFixed(1)}% in 24h`;}if(a.type==="wallet_bet"&&state.wallets.length&&Math.random()<.08){hit=true;msg=`Watched wallet activity detected on ${m.market}`;}if(hit){a.triggered=true;state.triggeredToday++;$("stat-triggered").textContent=state.triggeredToday;toast(msg,true);save();renderAlerts();}});});}
-function setGame(game){state.game=game;document.body.dataset.game=game;document.querySelectorAll(".game-tab").forEach(b=>b.classList.toggle("active",b.dataset.game===game));renderMarkets();populateMarkets();evaluateAlerts();}
-$("game-tabs").addEventListener("click",e=>{const tab=e.target.closest(".game-tab");if(tab)setGame(tab.dataset.game);});
-$("archive-toggle").onclick=e=>{state.archive=!state.archive;e.target.textContent="Archive: "+(state.archive?"On":"Off");loadLiveMarkets();};
-$("wallet-form").onsubmit=e=>{e.preventDefault();const address=$("wallet-address").value.trim();if(!/^0x[a-fA-F0-9]{40}$/.test(address)){toast("Enter a valid 42-character EVM wallet address.");return;}state.wallets.push({address,label:$("wallet-label").value.trim()});save();renderWallets();toast("Wallet added to watchlist.");e.target.reset();};
-$("alert-form").onsubmit=e=>{e.preventDefault();const type=$("alert-type").value;const threshold=parseFloat($("alert-threshold").value||0);state.alerts.push({id:crypto.randomUUID(),marketId:$("alert-market").value,type,threshold,triggered:false,createdAt:Date.now()});save();renderAlerts();toast("Alert rule created.");};
-$("alert-type").onchange=e=>{$("threshold-wrap").style.display=e.target.value==="wallet_bet"?"none":"flex";};
-$("platform-filter").oninput=renderMarkets;$("search").oninput=renderMarkets;
-$("sound-toggle").onclick=e=>{state.sound=!state.sound;e.target.textContent="Sound: "+(state.sound?"On":"Off");};
-$("browser-notifications").onclick=async()=>{const permission=await Notification.requestPermission();toast(permission==="granted"?"Browser alerts enabled.":"Browser alerts were not enabled.");};
-renderWallets();renderMarkets();renderAlerts();renderActivity();populateMarkets();
-setInterval(()=>{state.markets.forEach(m=>{if(m.status==="closed")return;const drift=(Math.random()-.5)*.015;m.yes=Math.min(.97,Math.max(.03,m.yes+drift));m.no=1-m.yes;m.change24h+=drift*.2;if(m.startsInMinutes!=null)m.startsInMinutes=Math.max(0,m.startsInMinutes-1/12);});renderMarkets();evaluateAlerts();},5000);
+const state = {
+  wallets: JSON.parse(localStorage.getItem("wallets") || "[]"),
+  alerts: JSON.parse(localStorage.getItem("alerts") || "[]"),
+  markets: [],
+  sound: true,
+  triggeredToday: 0
+};
+
+const $ = (id) => document.getElementById(id);
+const formatPercent = (value) => `${(value * 100).toFixed(1)}%`;
+const formatMoney = (value) => `$${Number(value || 0).toLocaleString()}`;
+const shortenAddress = (address) => `${address.slice(0, 6)}...${address.slice(-4)}`;
+
+function save() {
+  localStorage.setItem("wallets", JSON.stringify(state.wallets));
+  localStorage.setItem("alerts", JSON.stringify(state.alerts));
+}
+
+function toast(message, isAlert = false) {
+  const element = document.createElement("div");
+  element.className = `toast${isAlert ? " alert" : ""}`;
+  element.innerHTML = `<strong>${isAlert ? "Alert" : "Update"}</strong><br>${message}`;
+  $("toast-stack").appendChild(element);
+  setTimeout(() => element.remove(), 6000);
+
+  if (isAlert && state.sound) {
+    const context = new (window.AudioContext || window.webkitAudioContext)();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.frequency.value = 740;
+    gain.gain.value = 0.05;
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.18);
+  }
+
+  if (isAlert && Notification.permission === "granted") {
+    new Notification("Market alert", { body: message });
+  }
+}
+
+function renderWallets() {
+  const list = $("wallet-list");
+  list.innerHTML = "";
+
+  state.wallets.forEach((wallet, index) => {
+    const item = document.createElement("li");
+    item.innerHTML = `
+      <div>
+        <strong>${wallet.label || "Wallet"}</strong>
+        <div class="addr">${shortenAddress(wallet.address)}</div>
+      </div>
+    `;
+
+    const removeButton = document.createElement("button");
+    removeButton.className = "remove";
+    removeButton.textContent = "Remove";
+    removeButton.onclick = () => {
+      state.wallets.splice(index, 1);
+      save();
+      renderWallets();
+    };
+
+    item.appendChild(removeButton);
+    list.appendChild(item);
+  });
+
+  $("stat-wallets").textContent = state.wallets.length;
+}
+
+function renderMarkets() {
+  const query = $("search").value.toLowerCase();
+  const rows = state.markets.filter((market) =>
+    `${market.market} ${market.event}`.toLowerCase().includes(query)
+  );
+
+  $("market-rows").innerHTML = rows.map((market) => `
+    <tr>
+      <td>
+        <strong>${market.market}</strong>
+        <br>
+        <span style="color:var(--muted)">${market.event}</span>
+      </td>
+      <td>${formatPercent(market.yes)}</td>
+      <td>${formatPercent(market.no)}</td>
+      <td class="${market.change24h >= 0 ? "up" : "down"}">
+        ${market.change24h >= 0 ? "+" : ""}${(market.change24h * 100).toFixed(1)}%
+      </td>
+      <td>${formatMoney(market.volume)}</td>
+      <td><span class="badge ${market.status}">${market.status}</span></td>
+    </tr>
+  `).join("");
+
+  $("stat-markets").textContent = state.markets.length;
+}
+
+function renderAlerts() {
+  const list = $("alert-list");
+  list.innerHTML = state.alerts.length ? "" : "<li>No alert rules yet.</li>";
+
+  state.alerts.forEach((alert, index) => {
+    const market = state.markets.find((item) => item.id === alert.marketId);
+    const item = document.createElement("li");
+    item.innerHTML = `
+      <strong>${market?.market || "Market no longer available"}</strong>
+      <br>
+      <span style="color:var(--muted)">${describeAlert(alert)}</span>
+    `;
+
+    const removeButton = document.createElement("button");
+    removeButton.className = "remove";
+    removeButton.textContent = "Delete";
+    removeButton.onclick = () => {
+      state.alerts.splice(index, 1);
+      save();
+      renderAlerts();
+    };
+
+    item.appendChild(removeButton);
+    list.appendChild(item);
+  });
+
+  $("stat-alerts").textContent = state.alerts.length;
+}
+
+function describeAlert(alert) {
+  if (alert.type === "move") {
+    return `Yes price moves by at least ${alert.threshold}%`;
+  }
+
+  if (alert.type === "price_above") {
+    return `Yes price rises above ${alert.threshold}%`;
+  }
+
+  return `Yes price falls below ${alert.threshold}%`;
+}
+
+function populateMarketSelector() {
+  $("alert-market").innerHTML = state.markets
+    .map((market) => `<option value="${market.id}">${market.market}</option>`)
+    .join("");
+}
+
+function evaluateAlerts() {
+  state.markets.forEach((market) => {
+    state.alerts.forEach((alert) => {
+      if (alert.triggered || alert.marketId !== market.id) return;
+
+      let triggered = false;
+      let message = "";
+
+      if (
+        alert.type === "price_above" &&
+        market.yes * 100 >= alert.threshold
+      ) {
+        triggered = true;
+        message = `${market.market}: Yes is now ${formatPercent(market.yes)}`;
+      }
+
+      if (
+        alert.type === "price_below" &&
+        market.yes * 100 <= alert.threshold
+      ) {
+        triggered = true;
+        message = `${market.market}: Yes is now ${formatPercent(market.yes)}`;
+      }
+
+      if (
+        alert.type === "move" &&
+        Math.abs(market.change24h) * 100 >= alert.threshold
+      ) {
+        triggered = true;
+        message = `${market.market}: moved ${(market.change24h * 100).toFixed(1)}% in 24h`;
+      }
+
+      if (triggered) {
+        alert.triggered = true;
+        state.triggeredToday += 1;
+        $("stat-triggered").textContent = state.triggeredToday;
+        toast(message, true);
+        save();
+        renderAlerts();
+      }
+    });
+  });
+}
+
+$("wallet-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  const address = $("wallet-address").value.trim();
+
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    toast("Enter a valid 42-character EVM wallet address.");
+    return;
+  }
+
+  state.wallets.push({
+    address,
+    label: $("wallet-label").value.trim()
+  });
+
+  save();
+  renderWallets();
+  toast("Wallet added to watchlist.");
+  event.target.reset();
+});
+
+$("alert-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+
+  state.alerts.push({
+    id: crypto.randomUUID(),
+    marketId: $("alert-market").value,
+    type: $("alert-type").value,
+    threshold: Number($("alert-threshold").value || 0),
+    triggered: false,
+    createdAt: Date.now()
+  });
+
+  save();
+  renderAlerts();
+  toast("Alert rule created.");
+});
+
+$("alert-type").addEventListener("change", (event) => {
+  $("threshold-wrap").style.display =
+    event.target.value === "wallet_bet" ? "none" : "flex";
+});
+
+$("search").addEventListener("input", renderMarkets);
+
+$("sound-toggle").addEventListener("click", (event) => {
+  state.sound = !state.sound;
+  event.target.textContent = `Sound: ${state.sound ? "On" : "Off"}`;
+});
+
+$("browser-notifications").addEventListener("click", async () => {
+  const permission = await Notification.requestPermission();
+  toast(
+    permission === "granted"
+      ? "Browser alerts enabled."
+      : "Browser alerts were not enabled."
+  );
+});
+
+renderWallets();
+renderMarkets();
+renderAlerts();
