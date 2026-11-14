@@ -37,3 +37,7 @@ tr.suspicious{background:rgba(245,158,11,.10);box-shadow:inset 3px 0 0 var(--amb
 .toast{background:#161d26;border:1px solid var(--line);border-left:3px solid var(--blue);padding:12px 14px;border-radius:10px;min-width:290px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
 .toast.alert{border-left-color:var(--amber)}
 @media(max-width:1080px){.topbar{flex-wrap:wrap}.layout{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tab{background:var(--panel-2);border:1px solid var(--line);color:var(--muted)}
+.tab.active{color:var(--text);border-color:var(--blue);background:#182231}
+.filters{margin-bottom:12px}

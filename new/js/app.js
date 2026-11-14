@@ -2,6 +2,8 @@ const state = {
   wallets: JSON.parse(localStorage.getItem("wallets") || "[]"),
   alerts: JSON.parse(localStorage.getItem("alerts") || "[]"),
   markets: [],
+  activeTab: "all",
+  search: "",
   sound: true,
   triggeredToday: 0
 };
@@ -10,6 +12,18 @@ const $ = (id) => document.getElementById(id);
 const formatPercent = (value) => `${(value * 100).toFixed(1)}%`;
 const formatMoney = (value) => `$${Number(value || 0).toLocaleString()}`;
 const shortenAddress = (address) => `${address.slice(0, 6)}...${address.slice(-4)}`;
+
+const ESPORTS_KEYWORDS = [
+  "esports", "e-sports", "counter-strike", "counter strike", "cs2", "csgo",
+  "valorant", "league of legends", "lol", "dota", "dota 2", "rocket league",
+  "call of duty", "overwatch", "rainbow six", "apex legends", "fortnite",
+  "iem", "blast premier", "esl", "pgl", "major", "evo", "worlds"
+];
+
+const CS2_KEYWORDS = [
+  "cs2", "csgo", "counter-strike", "counter strike",
+  "iem", "blast premier", "esl", "pgl", "major"
+];
 
 function save() {
   localStorage.setItem("wallets", JSON.stringify(state.wallets));
@@ -38,6 +52,35 @@ function toast(message, isAlert = false) {
   if (isAlert && Notification.permission === "granted") {
     new Notification("Market alert", { body: message });
   }
+}
+
+function getMarketSearchText(market) {
+  const raw = market.raw || {};
+  const tags = Array.isArray(raw.tags)
+    ? raw.tags.map((tag) => tag?.label || tag?.name || "").join(" ")
+    : "";
+
+  return [
+    market.market,
+    market.event,
+    raw.slug,
+    raw.description,
+    tags
+  ].join(" ").toLowerCase();
+}
+
+function matchesTab(market) {
+  const text = getMarketSearchText(market);
+
+  if (state.activeTab === "esports") {
+    return ESPORTS_KEYWORDS.some((keyword) => text.includes(keyword));
+  }
+
+  if (state.activeTab === "cs2") {
+    return CS2_KEYWORDS.some((keyword) => text.includes(keyword));
+  }
+
+  return true;
 }
 
 function renderWallets() {
@@ -70,18 +113,17 @@ function renderWallets() {
 }
 
 function renderMarkets() {
-  const query = $("search").value.toLowerCase();
-  const rows = state.markets.filter((market) =>
-    `${market.market} ${market.event}`.toLowerCase().includes(query)
-  );
+  const query = state.search.toLowerCase();
+  const rows = state.markets
+    .filter(matchesTab)
+    .filter((market) =>
+      `${market.market} ${market.event}`.toLowerCase().includes(query)
+    );
 
   $("market-rows").innerHTML = rows.map((market) => `
     <tr>
-      <td>
-        <strong>${market.market}</strong>
-        <br>
-        <span style="color:var(--muted)">${market.event}</span>
-      </td>
+      <td><strong>${market.market}</strong></td>
+      <td>${market.event}</td>
       <td>${formatPercent(market.yes)}</td>
       <td>${formatPercent(market.no)}</td>
       <td class="${market.change24h >= 0 ? "up" : "down"}">
@@ -92,7 +134,7 @@ function renderMarkets() {
     </tr>
   `).join("");
 
-  $("stat-markets").textContent = state.markets.length;
+  $("stat-markets").textContent = rows.length;
 }
 
 function renderAlerts() {
@@ -137,7 +179,9 @@ function describeAlert(alert) {
 }
 
 function populateMarketSelector() {
-  $("alert-market").innerHTML = state.markets
+  const markets = state.markets.filter(matchesTab);
+
+  $("alert-market").innerHTML = markets
     .map((market) => `<option value="${market.id}">${market.market}</option>`)
     .join("");
 }
@@ -150,18 +194,12 @@ function evaluateAlerts() {
       let triggered = false;
       let message = "";
 
-      if (
-        alert.type === "price_above" &&
-        market.yes * 100 >= alert.threshold
-      ) {
+      if (alert.type === "price_above" && market.yes * 100 >= alert.threshold) {
         triggered = true;
         message = `${market.market}: Yes is now ${formatPercent(market.yes)}`;
       }
 
-      if (
-        alert.type === "price_below" &&
-        market.yes * 100 <= alert.threshold
-      ) {
+      if (alert.type === "price_below" && market.yes * 100 <= alert.threshold) {
         triggered = true;
         message = `${market.market}: Yes is now ${formatPercent(market.yes)}`;
       }
@@ -184,6 +222,12 @@ function evaluateAlerts() {
       }
     });
   });
+}
+
+function refreshViews() {
+  renderMarkets();
+  populateMarketSelector();
+  renderAlerts();
 }
 
 $("wallet-form").addEventListener("submit", (event) => {
@@ -229,7 +273,22 @@ $("alert-type").addEventListener("change", (event) => {
     event.target.value === "wallet_bet" ? "none" : "flex";
 });
 
-$("search").addEventListener("input", renderMarkets);
+$("search").addEventListener("input", (event) => {
+  state.search = event.target.value;
+  renderMarkets();
+});
+
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((item) => {
+      item.classList.remove("active");
+    });
+
+    tab.classList.add("active");
+    state.activeTab = tab.dataset.tab;
+    refreshViews();
+  });
+});
 
 $("sound-toggle").addEventListener("click", (event) => {
   state.sound = !state.sound;

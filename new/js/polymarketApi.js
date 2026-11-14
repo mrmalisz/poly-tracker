@@ -55,7 +55,7 @@ function normaliseMarket(raw, index) {
   };
 }
 
-async function fetchPolymarketMarkets(limit = 50) {
+async function fetchPolymarketMarkets(limit = 500) {
   const url = `${GAMMA_API}/markets?closed=false&limit=${limit}&order=volumeNum&ascending=false`;
 
   const response = await fetch(url, {
