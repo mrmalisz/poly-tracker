@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Esports Market Alerts</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-game="cs2">
+<header class="topbar">
+  <div class="brand"><span class="logo"></span> Esports Market Alerts</div>
+  <nav class="game-tabs" id="game-tabs">
+    <button class="game-tab active" data-game="cs2">CS2</button>
+    <button class="game-tab" data-game="dota2">Dota 2</button>
+    <button class="game-tab" data-game="lol">League of Legends</button>
+    <button class="game-tab" data-game="valorant">Valorant</button>
+  </nav>
+  <div class="top-actions">
+    <button id="archive-toggle" class="ghost">Archive: Off</button>
+    <button id="sound-toggle" class="ghost">Sound: On</button>
+    <button id="browser-notifications" class="ghost">Enable browser alerts</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside class="sidebar">
+    <section class="panel">
+      <h2>Watched wallets</h2>
+      <form id="wallet-form">
+        <input id="wallet-address" placeholder="0x wallet address" required>
+        <input id="wallet-label" placeholder="Label (optional)">
+        <button type="submit">Add wallet</button>
+      </form>
+      <ul id="wallet-list" class="wallet-list"></ul>
+    </section>
+
+    <section class="panel">
+      <h2>Create alert</h2>
+      <form id="alert-form">
+        <label>Market<select id="alert-market"></select></label>
+        <label>Type
+          <select id="alert-type">
+            <option value="price_above">Price above</option>
+            <option value="price_below">Price below</option>
+            <option value="move">Price moves by</option>
+            <option value="wallet_bet">Watched wallet bets</option>
+          </select>
+        </label>
+        <label id="threshold-wrap">Threshold (%)<input id="alert-threshold" type="number" min="0.1" step="0.1" value="5"></label>
+        <button type="submit">Create alert</button>
+      </form>
+    </section>
+  </aside>
+
+  <section class="content">
+    <div class="stats">
+      <div class="stat"><span>Markets tracked</span><strong id="stat-markets">0</strong></div>
+      <div class="stat"><span>Wallets watched</span><strong id="stat-wallets">0</strong></div>
+      <div class="stat"><span>Active alerts</span><strong id="stat-alerts">0</strong></div>
+      <div class="stat"><span>Alerts today</span><strong id="stat-triggered">0</strong></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="game-title">CS2 markets</h2>
+        <span id="data-source" class="source">Loading market data…</span>
+        <div class="filters">
+          <select id="platform-filter">
+            <option value="all">All platforms</option>
+            <option value="polymarket">Polymarket</option>
+            <option value="kalshi">Kalshi</option>
+          </select>
+          <input id="search" placeholder="Search team, event or market">
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Market</th><th>Platform</th><th>Yes</th><th>No</th><th>24h</th><th>Volume</th><th>Status</th><th>Signal</th></tr></thead>
+          <tbody id="market-rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Alert rules</h2></div>
+      <ul id="alert-list" class="rule-list"></ul>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h2>Recent wallet activity</h2></div>
+      <ul id="activity-feed" class="activity"></ul>
+    </div>
+  </section>
+</main>
+
+<div id="toast-stack"></div>
+<script src="js/mockData.js"></script>
+<script src="js/app.js"></script>
+<script src="js/polymarketApi.js"></script>
+</body>
+</html>
